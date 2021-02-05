@@ -198,7 +198,7 @@ function main()
     @show size(E)
     #@show size(F_k_1st[:,1])
     F_k_1st = E
-    setNwaveguide2!(matN, steps.x, steps.z, core_diameter, 0.2, material.nb, material.nb + material.Δn0, crange.z/3)
+    setNwaveguide2!(matN, steps.x, steps.z, core_diameter, 0.7, material.nb, material.nb + material.Δn0, crange.z/3)
     #@show matN
     
     #左辺は更新されたF_k_1stが入る。
