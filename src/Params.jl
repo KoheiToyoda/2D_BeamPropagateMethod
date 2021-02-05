@@ -26,14 +26,12 @@ module Params
     @with_kw struct crange
         # セルの距離(um)
         x::Float64 = 20um
-        y::Float64 = 20um
         z::Float64 = 20um
         t::Float64 = 10.0
     end
     @with_kw struct steps
         # セルのステップ（um
         x::Float64 = 0.1um
-        y::Float64 = 0.1um
         z::Float64 = 0.1um
         t::Float64 = 0.1
     end
@@ -41,8 +39,7 @@ module Params
     # Int16 * Int16 = Int16 により、xとyの値によっては、
     # 配列作成時にあふれだしてしまう。
     @with_kw struct N
-        x::Int64
-        y::Int64
+        x::Int64    
         z::Int64
         t::Int64
     end

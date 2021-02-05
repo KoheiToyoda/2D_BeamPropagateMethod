@@ -1,8 +1,9 @@
-x = 5
-using LinearAlgebra
+f(x,y) = (3x + y^2) * abs(sin(x) + cos(y))
 
-A = diagm(fill(2,x))
-A += diagm(1 => fill(3,x-1))
-A += diagm(-1 => fill(4,x-1))
-
-@show log(2.8)
+x = 0:0.01:2
+y = 0:0.01:1
+z = [f(i,j) for i in x, j in y]' # この転置を忘れるとデータが矛盾し、グラフが変になるので要注意．
+print(size(x))
+print(size(y))
+print(size(z))
+plot(x,y,z, st=:surface)
