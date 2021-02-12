@@ -54,11 +54,12 @@ module Params
         U0::Float64 = 100.0
         wavelength::Float64 = 1.06um
     end
-    @with_kw struct gauss_mode
+
+    @with_kw struct HG_mode
         m::Int8 = 0
         n::Int8 = 0
     end
-    @with_kw struct vortex_mode
+    @with_kw struct LG_mode
         # userはl,pで代入するが、
         # m,nのフィールドも持っておき、コードライティング中では、m,nでやらせる。
         l::Int8 = 1

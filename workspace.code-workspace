@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"name": "２Dビーム伝搬法",
+			"path": ".."
+		}
+	],
+	"settings": {
+		"julia.environmentPath": "c:\\Users\\KTOYODA\\OneDrive\\Programming\\julia\\２Dビーム伝搬法\\2D_BeamPropagateMethod"
+	}
+}

@@ -8,42 +8,47 @@ include("Params.jl")
 using LinearAlgebra
 using Plots
 using KTOptical 
+
 # 自作のパッケージを使うときにはGithubにアップロードして、
-# GithubのHTTPSをadd $$HTTPS_URL$$する。
-# プライベートでよい。
+# GithubのHTTPSをadd HTTPS_URLする。
+
 using CSV
 using DataFrames
 using BenchmarkTools
 using JLD2
 using Polynomials
 um = Params.um
+
 #using FileIO
 # 計算条件###################
 #計算レンジ
 λ = 1.06um
 crange = Params.crange(x = 30λ, z = 2500λ, t = 0.1)
+
 #計算ステップ
-steps = Params.steps(x = 0.2λ, z = 1λ, t = 0.1)
-Nx = Int(floor(crange.x / steps.x))
-Nz = Int(floor(crange.z / steps.z))
-Nt = Int(floor(crange.t / steps.t))
+#steps = Params.steps(x = 0.2λ, z = 1λ, t = 0.1)
+Nx = 501#Int(floor(crange.x / steps.x))
+Nz = 2501#Int(floor(crange.z / steps.z))
+Nt = 1#Int(floor(crange.t / steps.t))
 N = Params.N(Nx,Nz,Nt)
 
+steps = Params.steps(x = crange.x/Nx, z = crange.z/Nz, t = 0.1)
+
 #材料情報
-nb = 1.5
-Δn0 = -0.007
-Nref = nb - Δn0 /4
-mode = Params.gauss_mode(0,0)
-core_diameter = 4um
-beam_diameter = 2um
+nb = 1.47
+Δn0 = -0.16
+Nref = nb + Δn0/3
+mode = Params.HG_mode(0,0)
+core_diameter = 3λ
+beam_diameter = 1λ
 
 material = Params.materiarl(nb = nb, Δn0 = Δn0, τ = 0.1,α = 0)
 #ビーム情報
 beam = Params.beam(w = beam_diameter, U0 = 1, wavelength = 1.064um)
 
-println("計算環境")
+#println("計算環境")
 #versioninfo()
-Pkg.status()
+#Pkg.status()
 
 println("計算条件")
 @show crange
@@ -56,7 +61,7 @@ println("計算条件")
 #println("//////////////////////////////")
 function returnPades(T::Integer,N::Integer)
     # Julia に型注釈は必要ないが、Padeの数は整数型に限定したい。という説明
-    # 未実装、広角の場合はエラーが出る
+    # 未実装、広角(>10°)の場合はエラーが出る
 end
 
 # 各Zに対して、calcstepを回していく。
@@ -82,7 +87,7 @@ function calcStep1!(F_k_before, k, matN, Nref)
     # a,b,cは左辺用
     a = -1/(steps.x)^2
     c = -1/(steps.x)^2
-    
+
     # d は 右辺用
     B = zeros(ComplexF64,N.x,1)
 
@@ -99,16 +104,19 @@ function calcStep1!(F_k_before, k, matN, Nref)
     # bが位置によって値が異なるのでmapで対応。
     # diagmは配列を正方行列の対角に配置する。
     # pair（=>) でズレを表現できる。
-    b(i,k) = 1im*4*k0*matN[i, k]/steps.z + 2/steps.x^2 - k0^2(((matN[i, k]+matN[i+1, k])/2)^2 - Nref^2)
+
+    b(i,k)     = 1im*4*k0*((matN[i, k]+matN[i+1, k])/2)/steps.z + 2/steps.x^2 - k0^2(((matN[i, k]+matN[i+1, k])/2)^2 - Nref^2)
+    b_end(i,k) = 1im*4*k0*((matN[i, k]+matN[i-1, k])/2)/steps.z + 2/steps.x^2 - k0^2(((matN[i, k]+matN[i-1, k])/2)^2 - Nref^2)
     
     Apre = map( i -> begin
         if i == N.x
-            return 1im*4*k0*matN[i, k]/steps.z + 2/steps.x^2 - k0^2(((matN[i, k]+matN[i-1, k])/2)^2 - Nref^2)
+            return b_end(i, k)
         else
-            return b(i,k)
+            return b(i, k)
         end
     end, 
     1:N.x)
+
     A = diagm(Apre)
     A += diagm(1 => fill(a,N.x-1))
     A += diagm(-1 => fill(a,N.x-1))
@@ -116,12 +124,15 @@ function calcStep1!(F_k_before, k, matN, Nref)
 
         #反転処理
     if real(-(1/(1im * steps.x)) * log(F_k_before[1] / F_k_before[2])) < 0
-        tr_kl =  - real(-(1/(1im * steps.x)) * log(F_k_before[1] / F_k_before[2])) + imag(-(1/(1im * steps.x)) * log(F_k_before[1] / F_k_before[2]))
+        #realパートの符号反転処理がないと反射する。
+        tr_kl =  imag(-(1/(1im * steps.x)) * log(F_k_before[1] / F_k_before[2]))
+        tr_kl -= real(-(1/(1im * steps.x)) * log(F_k_before[1] / F_k_before[2]))
         alpha = exp(1im * tr_kl * -steps.x)
     end
 
     if real(-(1/(1im * steps.x)) * log(F_k_before[N.x] / F_k_before[N.x-1])) < 0
-        tr_kr =  - real(-(1/(1im * steps.x)) * log(F_k_before[N.x] / F_k_before[N.x-1])) + imag(-(1/(1im * steps.x)) * log(F_k_before[N.x] / F_k_before[N.x-1]))
+        tr_kr =  imag(-(1/(1im * steps.x)) * log(F_k_before[N.x] / F_k_before[N.x-1]))
+        tr_kr -= real(-(1/(1im * steps.x)) * log(F_k_before[N.x] / F_k_before[N.x-1]))
         beta = exp(-1im * tr_kr * steps.x)
     end
 
@@ -129,24 +140,26 @@ function calcStep1!(F_k_before, k, matN, Nref)
     A[N.x,N.x] += c* beta 
 
     e = 1/steps.x^2
-    d(i, k) = e * F_k_before[i-1]  + ((4im*Nref*k0)/steps.z - 2/steps.x^2 + (((matN[i, k]+matN[i+1, k])/2)^2 - Nref^2)*k0^2)* F_k_before[i] +1/steps.x^2 * F_k_before[i+1]
-    
     F_left = alpha * F_k_before[1]
     F_right = beta * F_k_before[N.x]
+
+    d(i, k)      = e * F_k_before[i-1]  + ((4im*Nref*k0)/steps.z - 2e + (((matN[i, k]+matN[i+1, k]) / 2)^2 - Nref^2)*k0^2)* F_k_before[i] + e * F_k_before[i+1]
+    d_left(i,k)  = e * F_left  +          ((4im*Nref*k0)/steps.z - 2e + (((matN[i, k]+matN[i+1, k]) / 2)^2 - Nref^2)*k0^2)* F_k_before[i] + e * F_k_before[i+1]
+    d_right(i,k) = e * F_k_before[i-1]  + ((4im*Nref*k0)/steps.z - 2e + (((matN[i, k]+matN[i-1, k]) / 2)^2 - Nref^2)*k0^2)* F_k_before[i] + e * F_right
 
     # https://docs.julialang.org/en/v1/manual/functions/#Do-Block-Syntax-for-Function-Arguments
     B = map( i -> begin
                         if i == 1
-                            return 1/steps.x^2 * F_left  + ((4im*Nref*k0)/steps.z - 2/(steps.x)^2 + (matN[i, k]^2-Nref^2)*k0^2)* F_k_before[i] +1/steps.x^2 * F_k_before[i+1]
+                            return d_left(i,k)
                         elseif i == N.x
-                            return 1/steps.x^2 * F_k_before[i-1]  + ((4im*Nref*k0)/steps.z - 2/(steps.x)^2 + (matN[i, k]^2-Nref^2)*k0^2)* F_k_before[i] +1/steps.x^2 * F_right
+                            return d_right(i,k)
                         else
                             return d(i,k)
                         end
                 end, 
                 1:N.x)
     #@show F_k_before
-    
+
     #########################
 
     F_k_after = B\A
@@ -166,7 +179,7 @@ end
 function initial_set(Mode, Beamparam)
     KTOptical.setParam(Beamparam.w, 0, Beamparam.wavelength)
 
-    x = range(-crange.x/2, crange.x/2 - steps.x, length = N.x)
+    x = range(-crange.x/2, crange.x/2, length = N.x)
     #y = range(-crange.y/2, crange.y/2 - steps.x ,length = N.y)
 
     #ここをLG_E HG_Eののなんかラッパ的な奴にできない？
@@ -184,6 +197,7 @@ function main()
     #@show size(F0)
     
     E = initial_set(mode, beam)
+    #E2 = initial_set
     gr()
     #!!!!!!!!!!!!!!!!!!!!!!!!
     x = range(-crange.x/2, crange.x/2 ,length = N.x)
@@ -198,7 +212,10 @@ function main()
     @show size(E)
     #@show size(F_k_1st[:,1])
     F_k_1st = E
-    setNwaveguide2!(matN, steps.x, steps.z, core_diameter, 0.2, material.nb, material.nb + material.Δn0, crange.z/3)
+    F_result[:,1] .= E
+#    function setNwaveguide2!(N, crange_x, crange_z, diameter, angle, baseN , propN, starting_separate)
+
+    setNwaveguide2!(matN, crange.x, crange.z, core_diameter, 0.2, material.nb, material.nb + material.Δn0, 600λ)
     #@show matN
     
     #左辺は更新されたF_k_1stが入る。
@@ -212,27 +229,31 @@ function main()
             if k%100 == 0
                 @show t,k
             end
-            F_k_1st = F_result[:,k] = calcStep1!(F_k_1st,  k, matN, Nref)
+            F_k_1st = F_result[:,k] = calcStep1!(F_k_1st, k, matN, Nref)
         end
     #    @save "/savefile/F_"* string(t)*".jld2" F_k_2nd
     end
     # @show F_result
     println("calc done")
     println("plotting.....") 
-    Ezx = abs.(F_result[: , :]).^2
+    Ezx = abs.(F_result[: , :])
 #  @show Ezx
     @show typeof(Ezx)
-    p1 = plot(x[1:5:end],z[1:5:end],Ezx[1:5:end,1:5:end]',
-      st=:surface, camera = (30 ,80), zlims=(0,0.6))
-    #p1 = contourf(Ezx[1:5:end,1:5:end], clim = (0,0.3))
-    @show size(x[1:5:end])
-    @show size(z[1:5:end])
-    @show size(Ezx[1:5:end,1:5:end])
-    @show maximum(abs.(F_result[ :, :]))
-    @show maximum(Ezx)
+    angle = [30,70]
+    p1 = plot(x, z, Ezx',
+      st=:surface, camera = (angle[1] ,80))
     display(p1)
+    p3 = plot(x,z,Ezx',
+    st=:surface, camera = (0,90))
+    display(p3)
+    p4 = plot(x, abs.(E),zlim=(0,0.75),cmax = (0,0.75))
+    display(p4)
     print()
-    @show crange.z
+    p5 = plot(x,z, abs.(matN)',
+    st=:surface, camera = (0,90))
+    display(p5)
+    p6 = plot(x, abs.(matN[:,1]))
+    display(p6)
     #//////////////////////////////////////////////////////////////////////
 
     tEzx = DataFrame(Ezx)
