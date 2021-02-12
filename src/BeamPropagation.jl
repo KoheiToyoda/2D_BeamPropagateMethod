@@ -212,10 +212,14 @@ function main()
     @show size(E)
     #@show size(F_k_1st[:,1])
     F_k_1st = E
+<<<<<<< HEAD
     F_result[:,1] .= E
 #    function setNwaveguide2!(N, crange_x, crange_z, diameter, angle, baseN , propN, starting_separate)
 
     setNwaveguide2!(matN, crange.x, crange.z, core_diameter, 0.2, material.nb, material.nb + material.Δn0, 600λ)
+=======
+    setNwaveguide2!(matN, steps.x, steps.z, core_diameter, 0.7, material.nb, material.nb + material.Δn0, crange.z/3)
+>>>>>>> f02994f30df6df69cb0a852a1dc46b8c9d04c276
     #@show matN
     
     #左辺は更新されたF_k_1stが入る。
